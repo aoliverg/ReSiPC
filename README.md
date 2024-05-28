@@ -55,6 +55,66 @@ The output file will be a tabbed corpus with the following structure: text_L1 ta
 
 For convenience, you can use the GUI version providing a very easy-to-use graphical user interface.
 
-# ReSiPC
+# ReSiPC.py
+
+This programs search for POS patterns in a parallel corpus tagged as described in the previous section. To run the program you have to create a file containing the patterns to search for. Each tagged token has the form:
+
+`word_form | lemma | POSTag`
+
+The pattern formalism allows to search for combinations of tagged tokens using regular expressions. It is very important to keep in mind that the patterns will depend on the tagset used by the POS Tagger, and these tagsets are language dependent.
+
+For example, the pattern 
+
+`||V.* ||SP.* ||N.*`
+
+would select all the segments whose Spanish version contains a verb followed by a preposition followed by a noun. As we can see from the example, standard regular expressions can be used in the patterns, making this formalism very powerful.
+
+Exact word forms or lemmata can also be specified in the patterns, as in 
+
+`|incitar| |a| ||VMN.*`
+
+where the pattern will select all the segments that in Spanish have the verb *incitar* (in any form, as it is specified as a lemma, to incite), followed by an *a* and followed by a verb in the infinitive form.
+
+The formalism also allows specifying a series of undefined elements between two defined elements. The expression
+
+`|proporcionar| *{0,5} |a|`
+
+would select any form of the verb *proporcionar* (to provide) followed by an a allowing from 0 to 5 undefined tokens between them. This expression would detect, for example, the following cases: *..proporciono a..., ...propociono ayuda a..., ...proporcionó mucha ayuda a..., ...proporcionó una gran ayuda a. . . , ...proporcionó una ayuda muy valiosa a. . . , proporciono una ayuda realmente muy valiosa a....*
+
+The text file may contain any number of patterns, with one pattern in each line.
+
+The program ReSiPC.py has the option -h that shows the help:
+
+```
+python3 ReSiPC.py -h
+usage: ReSiPC.py [-h] -i PARACORPUSFILE -o OUTFILE -p PATTERNSFILE
+
+ReSiPC: a tool for searching POS patterns in tagged parallel corpora.
+
+options:
+  -h, --help            show this help message and exit
+  -i PARACORPUSFILE, --in PARACORPUSFILE
+                        The input file containing the parallel corpus in tabbed text format.
+  -o OUTFILE, --out OUTFILE
+                        The output Excel file.
+  -p PATTERNSFILE, --patterns PATTERNSFILE
+                        The text file containing the patterns.
+```
+
+So if we have the tagged corpus corpus-tagged-eng-spa.txt and a pattern file patterns.txt that contain the pattern, as for example:
+
+`||VBG to|to|TO ||VB`
+
+(note that the tags used here are the corresponding to English)
+
+We can write:
+
+`python3 ReSiPC.py -i corpus-tagged-eng-spa.txt -o results.xlsx -p patterns.txt`
+
+In the Excel file results.xlsx we will get all the segments matching the pattern.
+
+For convenience, you can also use the GUI version providing a very easy-to-use graphical user interface.
+
+
 
 
