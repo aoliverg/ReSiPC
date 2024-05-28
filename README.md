@@ -14,6 +14,7 @@ Both programs are offered in two versions: terminal and GUI.
 
 Furthermore, Windows executable versions for the GUI versions of the programs are available from:
 
-* paraTaggerGUI.exe
-* ReSiPCGUI.exe
-* 
+* paraTaggerGUI.exe: [http://lpg.uoc.edu/ReSiPC/paraTaggerGUI.exe](http://lpg.uoc.edu/ReSiPC/paraTaggerGUI.exe)
+* ReSiPCGUI.exe: [http://lpg.uoc.edu/ReSiPC/ReSiPCGUI.exe](http://lpg.uoc.edu/ReSiPC/ReSiPCGUI.exe)
+
+  
