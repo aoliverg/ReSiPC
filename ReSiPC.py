@@ -125,6 +125,8 @@ def go():
 
                 sheetAll.write(cont, 2, textL2, text_wrap)
                 sheetAll.write(cont, 3, taggedL2, text_wrap)
+                for moreinfo in range(4,len(camps)):
+                    sheetAll.write(cont, moreinfo-1, camps[moreinfo], text_wrap)
                 cont+=1
     workbook.close()
 
