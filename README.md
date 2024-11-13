@@ -87,7 +87,8 @@ The program ReSiPC.py has the option -h that shows the help:
 
 ```
 python3 ReSiPC.py -h
-usage: ReSiPC.py [-h] -i PARACORPUSFILE -o OUTFILE -p PATTERNSFILE
+usage: ReSiPC.py [-h] -i PARACORPUSFILE -o OUTFILE -p PATTERNSFILE [-m] [-c] [-s SOURCECOLUMN] [-t TAGGEDCOLUMN]
+                 [-n NOMATCHESFILE]
 
 ReSiPC: a tool for searching POS patterns in tagged parallel corpora.
 
@@ -99,6 +100,14 @@ options:
                         The output Excel file.
   -p PATTERNSFILE, --patterns PATTERNSFILE
                         The text file containing the patterns.
+  -m, --marksource      Mark in bold the matches in source text (result is tokenized).
+  -c, --ignorecase      Ignore case in matching regular expressions.
+  -s SOURCECOLUMN, --source SOURCECOLUMN
+                        The column storing the source text (0 is first). Default 0.
+  -t TAGGEDCOLUMN, --tagged TAGGEDCOLUMN
+                        The column storing the tagged (0 is first). Default 1
+  -n NOMATCHESFILE, --nomatches NOMATCHESFILE
+                        A tsv file to store the lines not matching any pattern.
 ```
 
 So if we have the tagged corpus corpus-tagged-eng-spa.txt and a pattern file patterns.txt that contain the pattern, as for example:
