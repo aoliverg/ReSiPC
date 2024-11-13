@@ -2,6 +2,8 @@ import codecs
 import re
 import sys
 import xlsxwriter
+import argparse
+
 from tkinter import *
 from tkinter.ttk import *
 
@@ -10,6 +12,27 @@ from tkinter.filedialog import askopenfilename
 from tkinter.filedialog import asksaveasfilename
 from tkinter.filedialog import askdirectory
 from tkinter import messagebox
+
+def remove_xml_tags_and_retrieve(text):
+    """
+    Removes XML tags from a given string and retrieves the deleted tags.
+
+    Args:
+        text (str): The input string containing XML tags.
+
+    Returns:
+        tuple: A tuple containing the cleaned string and a list of deleted tags.
+    """
+    # Regular expression to match XML tags
+    tag_re = re.compile(r'<[^>]+>')
+    
+    # Find all tags in the text
+    tags = tag_re.findall(text)
+    
+    # Remove all tags from the text
+    cleaned_text = tag_re.sub('', text)
+    
+    return cleaned_text.rstrip().lstrip(), tags
 
 def translate_linguistic_pattern(pattern):
         aux=[]
@@ -30,9 +53,18 @@ def translate_linguistic_pattern(pattern):
         tp="("+" ".join(aux)+")"
         return(tp)
 
+def getWordForms(cadena):
+    tokens=cadena.split()
+    palabras=[]
+    for t in tokens:
+        palabras.append(t.split("|")[0])
+    palabras=" "+" ".join(palabras)+" "
+    return(palabras)
+
 def go():
-    patternsfile=E2.get()
-    entrada=codecs.open(patternsfile,"r",encoding="utf-8")
+    
+    patternfile=E2.get()
+    entrada=codecs.open(patternfile,"r",encoding="utf-8")
     regexps=[]
     for linia in entrada:
         linia=linia.rstrip()
@@ -43,6 +75,7 @@ def go():
     if not outfile.endswith(".xlsx"):
         outfile=outfile+".xlsx"
     workbook = xlsxwriter.Workbook(outfile)
+    bold_format = workbook.add_format({'bold': True})
     sheetAll = workbook.add_worksheet("All")
     sheetAll.set_column(0, 11, 50)
     bold   = workbook.add_format({'bold': True})
@@ -51,92 +84,123 @@ def go():
     paracorpusfile=E1.get()
     entrada=codecs.open(paracorpusfile,"r",encoding="utf-8")
     cont=1
+    contlinia=0
+    matchedlines={}
     for linia in entrada:
+        
+        matchstart={}
         linia=linia.rstrip()
         camps=linia.split("\t")
+        sourcecolumn=varSourceColumn.get()
+        taggedcolumn=varTargetColumn.get()
         try:
-            textL1=camps[0]
+            textL1ORIG=camps[sourcecolumn]
+            textL1,tags=remove_xml_tags_and_retrieve(textL1ORIG)
         except:
             textL1=""
         try:
-            taggedL1=camps[1]
+            taggedL1=camps[taggedcolumn]
         except:
             taggedL1=""
-        try:
-            textL2=camps[2]
-        except:
-            textL2=""
-        try:
-            taggedL2=camps[3]
-        except:
-            taggedL2=""
-        for expreg in regexps:
-            matches = re.findall(expreg, taggedL1)
-            if len(matches)>0:
-                textoabuscar=[]
-                for match in matches:
-                    buscar=[]
-                    for token in match.split(" "):
-                        camps2=token.split("|")
-                        buscar.append(camps2[0])
-                    buscar=" ".join(buscar)
-                    textoabuscar.append(buscar)
-                    
-                    
-                starts=[]
-                ends=[]
-                intervals=[]
-                for texto in textoabuscar:
-                    start=textL1.find(texto)
-                    end=start+len(texto)
-                    starts.append(start)
-                    ends.append(end)
-                    intervals.append((start,end))
-                segmentBOLD=list([])
-                position=0
-                for interval in intervals:
-                    start=interval[0]
-                    end=interval[1]
-                    segmentBOLD.append(normal)
-                    segmentBOLD.append("".join(textL1[position:start]))
-                    segmentBOLD.append(bold)
-                    segmentBOLD.append("".join(textL1[start:end]))
-                    position=end
-                segmentBOLD.append(normal)
-                segmentBOLD.append("".join(textL1[position:len(textL1)]))
-                sheetAll.write_rich_string(cont, 0, *segmentBOLD, text_wrap)
-                starts=[]
-                ends=[]
-                intervals=[]
-                sheetAll.write(cont, 1, taggedL1, text_wrap)
-                try:
-                    for texto in matches:
-                        start=taggedL1.find(texto)
-                        end=start+len(texto)
-                        starts.append(start)
-                        ends.append(end)
-                        intervals.append((start,end))
-                    segmentBOLD=list([])
-                    position=0
-                    for interval in intervals:
-                        start=interval[0]
-                        end=interval[1]
-                        segmentBOLD.append(normal)
-                        segmentBOLD.append("".join(taggedL1[position:start]))
-                        segmentBOLD.append(bold)
-                        segmentBOLD.append("".join(taggedL1[start:end]))
-                        position=end
-                    segmentBOLD.append(normal)
-                    segmentBOLD.append("".join(taggedL1[position:len(taggedL1)]))
-            
-                    sheetAll.write_rich_string(cont, 1, *segmentBOLD, text_wrap)
-                except:
-                    sheetAll.write(cont, 1, taggedL1, text_wrap)
 
-                sheetAll.write(cont, 2, textL2, text_wrap)
-                sheetAll.write(cont, 3, taggedL2, text_wrap)
-                cont+=1
+        allmatches=[]
+        ignorecase=varIgnoreCase.get()
+        for expreg in regexps:
+            if ignorecase:
+                matches = re.findall(expreg, taggedL1,re.IGNORECASE)
+            else:
+                matches = re.findall(expreg, taggedL1)
+            if len(matches)>0:
+                
+                # This list will hold the parts of the rich string
+                
+                allmatches.extend(matches)
+                
+        ALLmatches=list(set(allmatches))
+                #####
+        if len(ALLmatches)>0:
+            matchedlines[contlinia]=1
+            rich_text = []
+            rich_text_tags = []
+            current_position = 0
+            if len(tags)>0:
+                rich_text.append(tags[0])        
+            for match in ALLmatches:
+                pattern = r'\b' + re.escape(match) + r'\b'
+                matchesTagged = list(re.finditer(pattern, taggedL1))
+                for matchTagged in matchesTagged:
+                    start_idx = matchTagged.start()
+                    end_idx = matchTagged.end()
+                    #print(match,start_idx,end_idx)
+                    index=str(match)+":"+str(start_idx)+":"+str(end_idx)
+                    matchstart[index]=start_idx
+            sorted_dict = dict(sorted(matchstart.items(), key=lambda item: item[1]))
+            sheetAll.write(cont, sourcecolumn, textL1ORIG, text_wrap)
+            sheetAll.write(cont, taggedcolumn, taggedL1, text_wrap)
+            for info in sorted_dict:
+                m=info.split(":")[0]
+                start_idx=int(info.split(":")[1])
+                end_idx=int(info.split(":")[2])
+                # Add the text before the matched word (if any)
+                if current_position < start_idx:
+                    rich_text_tags.append(taggedL1[current_position:start_idx])
+                    wordforms=getWordForms(taggedL1[current_position:start_idx])
+                    rich_text.append(wordforms)
+                
+                # Add the matched word in bold
+                rich_text_tags.append(bold_format)
+                rich_text_tags.append(taggedL1[start_idx:end_idx])
+                wordforms=getWordForms(taggedL1[start_idx:end_idx])
+                rich_text.append(bold_format)
+                rich_text.append(wordforms)
+                
+                # Update the current position
+                current_position = end_idx
+
+            # Add any remaining text after the last match
+            if current_position < len(taggedL1):
+                rich_text_tags.append(taggedL1[current_position:])
+                wordforms=getWordForms(taggedL1[current_position:])
+                rich_text.append(wordforms)
+
+            # Write the rich string to the worksheet
+            for moreinfo in range(0,sourcecolumn):
+                sheetAll.write(cont, moreinfo, camps[moreinfo], text_wrap)
+            if len(tags)>1:
+                rich_text.append(tags[1])
+            marksource=varMark.get()
+            if marksource:
+                sheetAll.write_rich_string(cont,sourcecolumn, *rich_text, text_wrap)
+            else:
+                sheetAll.write(cont, sourcecolumn, textL1ORIG, text_wrap)
+            sheetAll.write_rich_string(cont,taggedcolumn, *rich_text_tags, text_wrap)
+            '''
+            sheetAll.write(cont, 2, textL2, text_wrap)
+            sheetAll.write(cont, 3, taggedL2, text_wrap)
+            '''
+            for moreinfo in range(taggedcolumn+1,len(camps)):
+                sheetAll.write(cont, moreinfo, camps[moreinfo], text_wrap)
+            cont+=1
+        contlinia+=1                
+   
     workbook.close()
+    entrada.close()
+    #write csv with non mathed lines     
+    paracorpusfile=E1.get()
+    nomatchesfile=E8.get()
+    if not nomatchesfile==None:
+        entrada=codecs.open(paracorpusfile,"r",encoding="utf-8")
+        sortida=codecs.open(nomatchesfile,"w",encoding="utf-8")
+        contlinia=0
+        for linia in entrada:
+            linia=linia.rstrip()
+            if not contlinia in matchedlines:
+                sortida.write(linia+"\n")
+            contlinia+=1
+    
+        entrada.close()
+        sortida.close()
+    
 
          
 def select_input_corpus():
@@ -160,7 +224,12 @@ def select_output_file():
     E3.insert(0,outfile)
     E3.xview_moveto(1)
     
-
+def select_nomatchesfile():
+    outfile = asksaveasfilename(initialdir = ".",filetypes =(("All Files","*.*"),),
+                           title = "Select the nomatchesfile file.")
+    E8.delete(0,END)
+    E8.insert(0,outfile)
+    E8.xview_moveto(1)
         
     
         
@@ -179,7 +248,33 @@ B3=tkinter.Button(top, text = str("Select output file"), borderwidth = 1, comman
 E3 = tkinter.Entry(top, bd = 5, width=80, justify="right")
 E3.grid(row=2,column=1)
 
-B4=tkinter.Button(top, text = str("Go!"), borderwidth = 1, command=go,width=25).grid(sticky="W",row=4,column=0)
+varMark = tkinter.IntVar()
+CB4 = tkinter.Checkbutton(top, text="Mark source", variable=varMark)
+CB4.grid(row=3,column=0,sticky="W")
+
+varIgnoreCase = tkinter.IntVar()
+CB5 = tkinter.Checkbutton(top, text="Ignore case", variable=varIgnoreCase)
+CB5.grid(row=4,column=0,sticky="W")
+
+varSourceColumn= tkinter.IntVar()
+varSourceColumn.set(0)
+L6 = Label(top,text="Source column:").grid(sticky="E",row=5,column=0)
+E6 = Entry(top, textvariable=varSourceColumn, width=5,)
+E6.grid(row=5,column=1,sticky="W")
+
+varTargetColumn= tkinter.IntVar()
+varTargetColumn.set(1)
+L7 = Label(top,text="Target column:").grid(sticky="E",row=6,column=0)
+E7 = Entry(top, textvariable=varTargetColumn, width=5,)
+E7.grid(row=6,column=1,sticky="W")
+
+B8=tkinter.Button(top, text = str("Select nomatchesfile"), borderwidth = 1, command=select_nomatchesfile,width=25).grid(row=7,column=0)
+E8 = tkinter.Entry(top, bd = 7, width=80, justify="right")
+E8.grid(row=7,column=1)
+
+B9=tkinter.Button(top, text = str("Go!"), borderwidth = 1, command=go,width=25).grid(sticky="W",row=8,column=0)
+
+
 
 top.mainloop() 
     

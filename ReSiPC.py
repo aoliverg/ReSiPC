@@ -4,6 +4,27 @@ import sys
 import xlsxwriter
 import argparse
 
+def remove_xml_tags_and_retrieve(text):
+    """
+    Removes XML tags from a given string and retrieves the deleted tags.
+
+    Args:
+        text (str): The input string containing XML tags.
+
+    Returns:
+        tuple: A tuple containing the cleaned string and a list of deleted tags.
+    """
+    # Regular expression to match XML tags
+    tag_re = re.compile(r'<[^>]+>')
+    
+    # Find all tags in the text
+    tags = tag_re.findall(text)
+    
+    # Remove all tags from the text
+    cleaned_text = tag_re.sub('', text)
+    
+    return cleaned_text.rstrip().lstrip(), tags
+
 def translate_linguistic_pattern(pattern):
         aux=[]
         for ptoken in pattern.split():
@@ -23,7 +44,16 @@ def translate_linguistic_pattern(pattern):
         tp="("+" ".join(aux)+")"
         return(tp)
 
+def getWordForms(cadena):
+    tokens=cadena.split()
+    palabras=[]
+    for t in tokens:
+        palabras.append(t.split("|")[0])
+    palabras=" "+" ".join(palabras)+" "
+    return(palabras)
+
 def go():
+    
     entrada=codecs.open(args.patternsfile,"r",encoding="utf-8")
     regexps=[]
     for linia in entrada:
@@ -34,6 +64,7 @@ def go():
     if not args.outfile.endswith(".xlsx"):
         args.outfile=args.outfile+".xlsx"
     workbook = xlsxwriter.Workbook(args.outfile)
+    bold_format = workbook.add_format({'bold': True})
     sheetAll = workbook.add_worksheet("All")
     sheetAll.set_column(0, 11, 50)
     bold   = workbook.add_format({'bold': True})
@@ -41,96 +72,118 @@ def go():
     text_wrap = workbook.add_format({'text_wrap': 1, 'valign': 'top'})
     entrada=codecs.open(args.paracorpusfile,"r",encoding="utf-8")
     cont=1
+    contlinia=0
+    matchedlines={}
     for linia in entrada:
+        
+        matchstart={}
         linia=linia.rstrip()
         camps=linia.split("\t")
         try:
-            textL1=camps[0]
+            textL1ORIG=camps[args.sourcecolumn]
+            textL1,tags=remove_xml_tags_and_retrieve(textL1ORIG)
         except:
             textL1=""
         try:
-            taggedL1=camps[1]
+            taggedL1=camps[args.taggedcolumn]
         except:
             taggedL1=""
-        try:
-            textL2=camps[2]
-        except:
-            textL2=""
-        try:
-            taggedL2=camps[3]
-        except:
-            taggedL2=""
+
+        allmatches=[]
         for expreg in regexps:
-            matches = re.findall(expreg, taggedL1)
+            if args.ignorecase:
+                matches = re.findall(expreg, taggedL1,re.IGNORECASE)
+            else:
+                matches = re.findall(expreg, taggedL1)
             if len(matches)>0:
-                textoabuscar=[]
-                for match in matches:
-                    buscar=[]
-                    for token in match.split(" "):
-                        camps2=token.split("|")
-                        buscar.append(camps2[0])
-                    buscar=" ".join(buscar)
-                    textoabuscar.append(buscar)
-                    
-                    
-                starts=[]
-                ends=[]
-                intervals=[]
-                for texto in textoabuscar:
-                    start=textL1.find(texto)
-                    end=start+len(texto)
-                    starts.append(start)
-                    ends.append(end)
-                    intervals.append((start,end))
-                segmentBOLD=list([])
-                position=0
-                for interval in intervals:
-                    start=interval[0]
-                    end=interval[1]
-                    segmentBOLD.append(normal)
-                    segmentBOLD.append("".join(textL1[position:start]))
-                    segmentBOLD.append(bold)
-                    segmentBOLD.append("".join(textL1[start:end]))
-                    position=end
-                segmentBOLD.append(normal)
-                segmentBOLD.append("".join(textL1[position:len(textL1)]))
-                sheetAll.write_rich_string(cont, 0, *segmentBOLD, text_wrap)
-                starts=[]
-                ends=[]
-                intervals=[]
-                sheetAll.write(cont, 1, taggedL1, text_wrap)
-                try:
-                    for texto in matches:
-                        start=taggedL1.find(texto)
-                        end=start+len(texto)
-                        starts.append(start)
-                        ends.append(end)
-                        intervals.append((start,end))
-                    segmentBOLD=list([])
-                    position=0
-                    for interval in intervals:
-                        start=interval[0]
-                        end=interval[1]
-                        segmentBOLD.append(normal)
-                        segmentBOLD.append("".join(taggedL1[position:start]))
-                        segmentBOLD.append(bold)
-                        segmentBOLD.append("".join(taggedL1[start:end]))
-                        position=end
-                    segmentBOLD.append(normal)
-                    segmentBOLD.append("".join(taggedL1[position:len(taggedL1)]))
-            
-                    sheetAll.write_rich_string(cont, 1, *segmentBOLD, text_wrap)
-                except:
-                    sheetAll.write(cont, 1, taggedL1, text_wrap)
+                
+                # This list will hold the parts of the rich string
+                
+                allmatches.extend(matches)
+                
+        ALLmatches=list(set(allmatches))
+                #####
+        if len(ALLmatches)>0:
+            matchedlines[contlinia]=1
+            rich_text = []
+            rich_text_tags = []
+            current_position = 0
+            if len(tags)>0:
+                rich_text.append(tags[0])        
+            for match in ALLmatches:
+                pattern = r'\b' + re.escape(match) + r'\b'
+                matchesTagged = list(re.finditer(pattern, taggedL1))
+                for matchTagged in matchesTagged:
+                    start_idx = matchTagged.start()
+                    end_idx = matchTagged.end()
+                    #print(match,start_idx,end_idx)
+                    index=str(match)+":"+str(start_idx)+":"+str(end_idx)
+                    matchstart[index]=start_idx
+            sorted_dict = dict(sorted(matchstart.items(), key=lambda item: item[1]))
+            sheetAll.write(cont, args.sourcecolumn, textL1ORIG, text_wrap)
+            sheetAll.write(cont, args.taggedcolumn, taggedL1, text_wrap)
+            for info in sorted_dict:
+                m=info.split(":")[0]
+                start_idx=int(info.split(":")[1])
+                end_idx=int(info.split(":")[2])
+                # Add the text before the matched word (if any)
+                if current_position < start_idx:
+                    rich_text_tags.append(taggedL1[current_position:start_idx])
+                    wordforms=getWordForms(taggedL1[current_position:start_idx])
+                    rich_text.append(wordforms)
+                
+                # Add the matched word in bold
+                rich_text_tags.append(bold_format)
+                rich_text_tags.append(taggedL1[start_idx:end_idx])
+                wordforms=getWordForms(taggedL1[start_idx:end_idx])
+                rich_text.append(bold_format)
+                rich_text.append(wordforms)
+                
+                # Update the current position
+                current_position = end_idx
 
-                sheetAll.write(cont, 2, textL2, text_wrap)
-                sheetAll.write(cont, 3, taggedL2, text_wrap)
-                for moreinfo in range(4,len(camps)):
-                    sheetAll.write(cont, moreinfo-1, camps[moreinfo], text_wrap)
-                cont+=1
+            # Add any remaining text after the last match
+            if current_position < len(taggedL1):
+                rich_text_tags.append(taggedL1[current_position:])
+                wordforms=getWordForms(taggedL1[current_position:])
+                rich_text.append(wordforms)
+
+            # Write the rich string to the worksheet
+            for moreinfo in range(0,args.sourcecolumn):
+                sheetAll.write(cont, moreinfo, camps[moreinfo], text_wrap)
+            if len(tags)>1:
+                rich_text.append(tags[1])
+            if args.marksource:
+                sheetAll.write_rich_string(cont,args.sourcecolumn, *rich_text, text_wrap)
+            else:
+                sheetAll.write(cont, args.sourcecolumn, textL1ORIG, text_wrap)
+            sheetAll.write_rich_string(cont,args.taggedcolumn, *rich_text_tags, text_wrap)
+            '''
+            sheetAll.write(cont, 2, textL2, text_wrap)
+            sheetAll.write(cont, 3, taggedL2, text_wrap)
+            '''
+            for moreinfo in range(args.taggedcolumn+1,len(camps)):
+                sheetAll.write(cont, moreinfo, camps[moreinfo], text_wrap)
+            cont+=1
+        contlinia+=1                
+   
     workbook.close()
-
-         
+    entrada.close()
+    #write csv with non mathed lines     
+    
+    if not args.nomatchesfile==None:
+        entrada=codecs.open(args.paracorpusfile,"r",encoding="utf-8")
+        sortida=codecs.open(args.nomatchesfile,"w",encoding="utf-8")
+        contlinia=0
+        for linia in entrada:
+            linia=linia.rstrip()
+            if not contlinia in matchedlines:
+                sortida.write(linia+"\n")
+            contlinia+=1
+    
+        entrada.close()
+        sortida.close()
+    
             
         
     
@@ -142,177 +195,14 @@ parser = argparse.ArgumentParser(description='ReSiPC: a tool for searching POS p
 parser.add_argument('-i','--in', action="store", dest="paracorpusfile", help='The input file containing the parallel corpus in tabbed text format.',required=True)
 parser.add_argument('-o','--out', action="store", dest="outfile", help='The output Excel file.',required=True)
 parser.add_argument('-p','--patterns', action="store", dest="patternsfile", help='The text file containing the patterns.',required=True)
+parser.add_argument('-m','--marksource', action="store_true", dest="marksource", help='Mark in bold the matches in source text (result is tokenized).',required=False, default=False)
+parser.add_argument('-c','--ignorecase', action="store_true", dest="ignorecase", help='Ignore case in matching regular expressions.',required=False, default=False)
+parser.add_argument('-s','--source', action="store", dest="sourcecolumn", help='The column storing the source text (0 is first). Default 0.',required=False, default=0, type=int)
+parser.add_argument('-t','--tagged', action="store", dest="taggedcolumn", help='The column storing the tagged (0 is first). Default 1',required=False, default=1, type=int)
+parser.add_argument('-n','--nomatches', action="store", dest="nomatchesfile", help='A tsv file to store the lines not matching any pattern.',required=False)
 
 args = parser.parse_args()
 
 
 
 go()
-
-'''
-entrada=codecs.open("SHUFFLE RomCro 1-27 SE s oznakama_NOVO_TAGGED.csv","r",encoding="utf-8")
-
-workbook = xlsxwriter.Workbook("RomCro-pasivos-spa.xlsx")
-sheetAll = workbook.add_worksheet("All")
-sheetAll.set_column(0, 11, 50)
-#bold   = workbook.add_format({'font_name':'Tahoma', 'bold': True, 'font_size':14})
-#normal = workbook.add_format({'font_name':'Tahoma', 'font_size':11})
-bold   = workbook.add_format({'bold': True})
-normal = workbook.add_format({'bold': False})
-text_wrap = workbook.add_format({'text_wrap': 1, 'valign': 'top'})
-
-#lema ser + etiqueta vmp.
-patron="|ser| ||vmp."
-
-expreg=translate_linguistic_pattern(patron)
-
-
-cont=1
-for linea in entrada:
-    linea=linea.rstrip()
-    campos=linea.split("\t")
-    try:
-        textoES=campos[0]
-    except:
-        textoES=""
-    try:
-        taggedES=campos[1]
-    except:
-        taggedES=""
-
-    try:
-        textoHR=campos[2]
-    except:
-        textoHR=""
-    try:
-        taggedHR=campos[3]
-    except:
-        taggedHR=""
-    
-    try:
-        textoFR=campos[4]
-    except:
-        textoFR=""
-    try:
-        taggedFR=campos[5]
-    except:
-        taggedFR=""    
-        
-    try:
-        textoIT=campos[6]
-    except:
-        textoIT=""
-    try:
-        taggedIT=campos[7]
-    except:
-        taggedIT=""
-        
-    try:
-        textoPT=campos[8]
-    except:
-        textoPT=""
-    try:
-        taggedPT=campos[9]
-    except:
-        taggedPT=""
-    try:
-        textoRO=campos[10]
-    except:
-        textoRO=""
-    try:
-        taggedRO=campos[11]
-    except:
-        taggedRO=""
-        
-    
-        
-    matches = re.findall(expreg, taggedES)    
-    
-    if len(matches)>0:
-        textoabuscar=[]
-        for match in matches:
-            buscar=[]
-            for token in match.split(" "):
-                campos2=token.split("|")
-                buscar.append(campos2[0])
-            buscar=" ".join(buscar)
-            textoabuscar.append(buscar)
-         
-                
-        
-       
-        ###
-        starts=[]
-        ends=[]
-        intervals=[]
-        for texto in textoabuscar:
-            start=textoES.find(texto)
-            end=start+len(texto)
-            starts.append(start)
-            ends.append(end)
-            intervals.append((start,end))
-        segmentBOLD=list([])
-        position=0
-        for interval in intervals:
-            start=interval[0]
-            end=interval[1]
-            segmentBOLD.append(normal)
-            segmentBOLD.append("".join(textoES[position:start]))
-            segmentBOLD.append(bold)
-            segmentBOLD.append("".join(textoES[start:end]))
-            position=end
-        segmentBOLD.append(normal)
-        segmentBOLD.append("".join(textoES[position:len(textoES)]))
-        ###
-        #segmentBOLD="".join(segmentBOLD)        
-        sheetAll.write_rich_string(cont, 0, *segmentBOLD, text_wrap)
-        #sheetAll.write(cont, 1, taggedES, text_wrap)
-        starts=[]
-        ends=[]
-        intervals=[]
-        sheetAll.write(cont, 1, taggedES, text_wrap)
-        try:
-            for texto in matches:
-                start=taggedES.find(texto)
-                end=start+len(texto)
-                starts.append(start)
-                ends.append(end)
-                intervals.append((start,end))
-            segmentBOLD=list([])
-            position=0
-            for interval in intervals:
-                start=interval[0]
-                end=interval[1]
-                segmentBOLD.append(normal)
-                segmentBOLD.append("".join(taggedES[position:start]))
-                segmentBOLD.append(bold)
-                segmentBOLD.append("".join(taggedES[start:end]))
-                position=end
-            segmentBOLD.append(normal)
-            segmentBOLD.append("".join(taggedES[position:len(taggedES)]))
-            ###
-            #segmentBOLD="".join(segmentBOLD)        
-            sheetAll.write_rich_string(cont, 1, *segmentBOLD, text_wrap)
-        except:
-            sheetAll.write(cont, 1, taggedES, text_wrap)
-        
-        sheetAll.write(cont, 2, textoHR, text_wrap)
-        sheetAll.write(cont, 3, taggedHR, text_wrap)
-        
-        sheetAll.write(cont, 4, textoFR, text_wrap)
-        sheetAll.write(cont, 5, taggedFR, text_wrap)
-        
-        sheetAll.write(cont, 6, textoIT, text_wrap)
-        sheetAll.write(cont, 7, taggedIT, text_wrap)
-        
-        sheetAll.write(cont, 8, textoPT, text_wrap)
-        sheetAll.write(cont, 9, taggedPT, text_wrap)
-        
-        sheetAll.write(cont, 10, textoRO, text_wrap)
-        sheetAll.write(cont, 11, taggedRO, text_wrap)
-        
-        cont+=1
-        
-workbook.close()
-    
-'''
